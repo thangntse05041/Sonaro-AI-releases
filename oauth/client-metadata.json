@@ -1,0 +1,18 @@
+{
+  "client_id": "https://thangntse05041.github.io/Sonaro-AI-releases/oauth/client-metadata.json",
+  "client_name": "Sonaro AI",
+  "client_uri": "https://thangntse05041.github.io/Sonaro-AI-releases/",
+  "redirect_uris": [
+    "http://127.0.0.1:53690/auth/callback",
+    "http://127.0.0.1:53691/auth/callback",
+    "http://127.0.0.1:53692/auth/callback"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "token_endpoint_auth_method": "none"
+}
