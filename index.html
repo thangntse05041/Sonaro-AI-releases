@@ -33,7 +33,8 @@
     background: var(--card); text-decoration: none; color: var(--fg); }
   .dl:hover { border-color: var(--accent); }
   .dl strong { display: block; }
-  .dl span { color: var(--muted); font-size: .85rem; }
+  .dl span { display: block; color: var(--muted); font-size: .85rem; }
+  .dl .size { margin-top: .35rem; font-variant-numeric: tabular-nums; }
   .version { font-size: .875rem; color: var(--muted); margin-top: .5rem; }
   ul { padding-left: 1.2rem; }
   code { background: var(--chip); padding: .1rem .35rem; border-radius: .3rem; font-size: .9em; }
@@ -55,14 +56,14 @@
 
   <h2 data-i18n="download">Tải về</h2>
   <div class="downloads">
-    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI-Setup.exe">
-      <strong>Windows</strong><span data-i18n="win">Windows 10/11 (64-bit)</span></a>
-    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI-arm64.dmg">
-      <strong>macOS</strong><span data-i18n="macArm">Apple Silicon (M1, M2, M3…)</span></a>
-    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI-x64.dmg">
-      <strong>macOS</strong><span data-i18n="macIntel">Intel</span></a>
-    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI.apk">
-      <strong>Android</strong><span data-i18n="android">Android 7 trở lên (.apk)</span></a>
+    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI-Setup.exe" data-asset="Sonaro-AI-Setup.exe">
+      <strong>Windows</strong><span data-i18n="win">Windows 10/11 (64-bit)</span><span class="size"></span></a>
+    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI-arm64.dmg" data-asset="Sonaro-AI-arm64.dmg">
+      <strong>macOS</strong><span data-i18n="macArm">Apple Silicon (M1, M2, M3…)</span><span class="size"></span></a>
+    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI-x64.dmg" data-asset="Sonaro-AI-x64.dmg">
+      <strong>macOS</strong><span data-i18n="macIntel">Intel</span><span class="size"></span></a>
+    <a class="dl" href="https://github.com/thangntse05041/Sonaro-AI-releases/releases/latest/download/Sonaro-AI.apk" data-asset="Sonaro-AI.apk">
+      <strong>Android</strong><span data-i18n="android">Android 7 trở lên (.apk)</span><span class="size"></span></a>
   </div>
   <p class="version"><span id="version"></span>
     <a href="https://github.com/thangntse05041/Sonaro-AI-releases/releases" data-i18n="allVersions">Tất cả phiên bản</a></p>
@@ -193,6 +194,13 @@
   }
 
   var latest = '';
+  /** Release file name → size in bytes (from the latest release). */
+  var sizes = {};
+  var LOCALES = { vi: 'vi-VN', en: 'en-US', ja: 'ja-JP' };
+  function formatSize(bytes, lang) {
+    var mb = bytes / (1024 * 1024);
+    return new Intl.NumberFormat(LOCALES[lang], { maximumFractionDigits: mb < 10 ? 1 : 0 }).format(mb) + ' MB';
+  }
   function apply(lang, remember) {
     var t = T[lang];
     document.documentElement.lang = lang;
@@ -209,6 +217,10 @@
     });
     document.getElementById('privacy').href = 'PRIVACY.html#' + lang;
     document.getElementById('version').textContent = latest ? t.latest + latest + ' · ' : '';
+    document.querySelectorAll('[data-asset]').forEach(function (a) {
+      var bytes = sizes[a.getAttribute('data-asset')];
+      a.querySelector('.size').textContent = bytes ? formatSize(bytes, lang) : '';
+    });
     if (remember) {
       try { localStorage.setItem('sonaro.lang', lang); } catch (e) { /* this visit only */ }
       var url = new URL(location.href);
@@ -226,7 +238,12 @@
 
   fetch('https://api.github.com/repos/thangntse05041/Sonaro-AI-releases/releases/latest')
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (r) { if (r && r.tag_name) { latest = r.tag_name; apply(current, false); } })
+    .then(function (r) {
+      if (!r || !r.tag_name) return;
+      latest = r.tag_name;
+      (r.assets || []).forEach(function (asset) { sizes[asset.name] = asset.size; });
+      apply(current, false);
+    })
     .catch(function () { /* no version line */ });
 })();
 </script>
