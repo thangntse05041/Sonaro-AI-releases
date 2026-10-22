@@ -107,7 +107,7 @@
       title: 'Sonaro AI',
       lead: 'Trò chuyện với AI miễn phí, tìm web kèm nguồn trích dẫn, làm việc với tài liệu và code — trên máy tính và điện thoại.',
       download: 'Tải về', win: 'Windows 10/11 (64-bit)', macArm: 'Apple Silicon (M1, M2, M3…)', macIntel: 'Intel',
-      android: 'Android 7 trở lên (.apk)', allVersions: 'Tất cả phiên bản', latest: 'Bản mới nhất: ',
+      android: 'Android 7 trở lên (.apk)', allVersions: 'Tất cả phiên bản', latest: 'Bản mới nhất: ', released: 'phát hành ',
       featuresTitle: 'Có gì trong app', installTitle: 'Cài đặt', updateTitle: 'Cập nhật',
       privacy: 'Quyền riêng tư', contact: 'Báo lỗi / liên hệ',
       features: null, install: null, update: null
@@ -116,7 +116,7 @@
       title: 'Sonaro AI',
       lead: 'Chat with free AI, search the web with cited sources, work with documents and code — on your computer and phone.',
       download: 'Download', win: 'Windows 10/11 (64-bit)', macArm: 'Apple Silicon (M1, M2, M3…)', macIntel: 'Intel',
-      android: 'Android 7 or later (.apk)', allVersions: 'All versions', latest: 'Latest: ',
+      android: 'Android 7 or later (.apk)', allVersions: 'All versions', latest: 'Latest: ', released: 'released ',
       featuresTitle: "What's inside", installTitle: 'Install', updateTitle: 'Updates',
       privacy: 'Privacy', contact: 'Report a problem / contact',
       features: [
@@ -145,7 +145,7 @@
       title: 'Sonaro AI',
       lead: '無料のAIとチャット、出典付きのWeb検索、ドキュメントやコードの作業 — パソコンでもスマホでも。',
       download: 'ダウンロード', win: 'Windows 10/11（64ビット）', macArm: 'Apple シリコン（M1、M2、M3…）', macIntel: 'Intel',
-      android: 'Android 7 以降（.apk）', allVersions: 'すべてのバージョン', latest: '最新版: ',
+      android: 'Android 7 以降（.apk）', allVersions: 'すべてのバージョン', latest: '最新版: ', released: '公開日 ',
       featuresTitle: '主な機能', installTitle: 'インストール', updateTitle: 'アップデート',
       privacy: 'プライバシー', contact: '不具合の報告・お問い合わせ',
       features: [
@@ -194,6 +194,8 @@
   }
 
   var latest = '';
+  /** When the latest release was published (ISO time from the GitHub API). */
+  var releasedAt = '';
   /** Release file name → size in bytes (from the latest release). */
   var sizes = {};
   var LOCALES = { vi: 'vi-VN', en: 'en-US', ja: 'ja-JP' };
@@ -216,7 +218,12 @@
       b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang));
     });
     document.getElementById('privacy').href = 'PRIVACY.html#' + lang;
-    document.getElementById('version').textContent = latest ? t.latest + latest + ' · ' : '';
+    var day = releasedAt
+      ? new Intl.DateTimeFormat(LOCALES[lang], { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(releasedAt))
+      : '';
+    document.getElementById('version').textContent = latest
+      ? t.latest + latest + (day ? ' · ' + t.released + day : '') + ' · '
+      : '';
     document.querySelectorAll('[data-asset]').forEach(function (a) {
       var bytes = sizes[a.getAttribute('data-asset')];
       a.querySelector('.size').textContent = bytes ? formatSize(bytes, lang) : '';
@@ -241,6 +248,7 @@
     .then(function (r) {
       if (!r || !r.tag_name) return;
       latest = r.tag_name;
+      releasedAt = r.published_at || '';
       (r.assets || []).forEach(function (asset) { sizes[asset.name] = asset.size; });
       apply(current, false);
     })
