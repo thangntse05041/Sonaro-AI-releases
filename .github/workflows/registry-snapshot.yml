@@ -1,8 +1,13 @@
-# Daily copy of the official MCP Registry for Settings → Connectors (the registry search takes
-# 10–60 s; the app searches this file on the device). Lives in the public Sonaro-AI-releases repo
-# as .github/workflows/registry-snapshot.yml; its source is docs/releases-repo/ of the app repo.
-# No artifacts and no cache (Actions storage stays empty); the file goes to the registry-data
-# branch as one commit, replaced only when the registry changed, so the repo does not grow.
+# Daily copies for the app, published on the registry-data branch of the public
+# Sonaro-AI-releases repo:
+#   connectors.json — the official MCP Registry for Settings → Connectors (its search takes 10–60 s;
+#                     the app searches this file on the device);
+#   skills.json     — the skills.sh list for Settings → Skills → Discover (used when skills.sh does
+#                     not answer).
+# Lives in that repo as .github/workflows/registry-snapshot.yml; its source is docs/releases-repo/
+# of the app repo. No artifacts and no cache (Actions storage stays empty); both files go to the
+# branch as one commit, replaced only when one changed, so the repo does not grow. When one source
+# fails, its previous file is kept.
 name: Registry snapshot
 
 on:
@@ -15,6 +20,7 @@ on:
     paths:
       - .github/workflows/registry-snapshot.yml
       - .github/scripts/registry-snapshot.mjs
+      - .github/scripts/skills-snapshot.mjs
 
 permissions:
   contents: write
@@ -29,27 +35,45 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Previous copies
+        run: |
+          mkdir -p "$RUNNER_TEMP/old"
+          if git fetch --depth 1 origin registry-data 2>/dev/null; then
+            git show FETCH_HEAD:connectors.json > "$RUNNER_TEMP/old/connectors.json" 2>/dev/null || true
+            git show FETCH_HEAD:skills.json > "$RUNNER_TEMP/old/skills.json" 2>/dev/null || true
+          fi
       - name: Read the registry
+        continue-on-error: true
         run: node .github/scripts/registry-snapshot.mjs "$RUNNER_TEMP/connectors.json"
-      - name: Publish when it changed
+      - name: Read skills.sh
+        continue-on-error: true
+        run: node .github/scripts/skills-snapshot.mjs "$RUNNER_TEMP/skills.json"
+      - name: Publish when one changed
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          new="$RUNNER_TEMP/connectors.json"
-          if git fetch --depth 1 origin registry-data 2>/dev/null \
-            && git show FETCH_HEAD:connectors.json > "$RUNNER_TEMP/old.json" \
-            && cmp -s "$RUNNER_TEMP/old.json" "$new"; then
+          dir="$(mktemp -d)"
+          changed=0
+          for f in connectors.json skills.json; do
+            if [ -s "$RUNNER_TEMP/$f" ]; then
+              cp "$RUNNER_TEMP/$f" "$dir/$f"
+            elif [ -s "$RUNNER_TEMP/old/$f" ]; then
+              echo "$f: source failed, the previous copy stays."
+              cp "$RUNNER_TEMP/old/$f" "$dir/$f"
+            else
+              echo "$f: no copy yet."
+              continue
+            fi
+            cmp -s "$dir/$f" "$RUNNER_TEMP/old/$f" 2>/dev/null || changed=1
+          done
+          if [ "$changed" = 0 ]; then
             echo "No change."
             exit 0
           fi
-          dir="$(mktemp -d)"
-          cp "$new" "$dir/connectors.json"
           cd "$dir"
           git init -q -b registry-data
-          git add connectors.json
-          git -c user.name='github-actions[bot]' \
-            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -q -m 'Registry snapshot'
+          git add .
+          git -c user.name='github-actions[bot]'             -c user.email='41898282+github-actions[bot]@users.noreply.github.com'             commit -q -m 'Registry and skills snapshot'
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" registry-data
-          echo "Published $(wc -c < connectors.json) bytes."
+          ls -l
