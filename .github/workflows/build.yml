@@ -1,0 +1,139 @@
+# Builds the installers of one version of the (private) app repo and publishes them on the
+# release of the same tag in this public repo (thangntse05041/Sonaro-AI-releases): each platform
+# as soon as its job is done; the first one creates the release.
+# Lives in that repo as .github/workflows/build.yml; its source is docs/releases-repo/build.yml of
+# the app repo, and `npm run release` updates it here when the source changed, then starts it.
+# Why here: Actions minutes are free and unlimited for public repos (macOS counts x10 on private).
+# The source is checked out with a read-only deploy key (secret SOURCE_DEPLOY_KEY). The logs of
+# this repo are public: no step prints source code (tests run on the developer's machine before
+# the release), and inputs reach the shell only through env, never through ${{ }} in `run`.
+# A failed or cancelled job is re-run alone (`gh run rerun --failed`, which `npm run release`
+# does by itself). No Actions artifacts and no npm cache: Actions storage stays empty.
+name: Build release
+run-name: Build ${{ inputs.tag }} (${{ inputs.sha }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag of the app repo (for example v2.7.0)'
+        required: true
+      sha:
+        description: 'Commit of the app repo the tag points at'
+        required: true
+      notes:
+        description: 'Release notes (Markdown)'
+        required: true
+      prerelease:
+        description: 'Mark the release as a pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag }}
+  SHA: ${{ inputs.sha }}
+  NOTES: ${{ inputs.notes }}
+  PRERELEASE: ${{ inputs.prerelease }}
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  # The app is not code signed (see CLAUDE.md 14, Phase 6).
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+  # Supabase project for sign-in and sync (publishable values; see docs/supabase-setup.md).
+  MAIN_VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  MAIN_VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+  # Creates the release of TAG when no job did yet (two jobs may try at once), then uploads
+  # the files given as arguments. Run as: bash -c "$PUBLISH" publish <files…>
+  PUBLISH: |
+    set -euo pipefail
+    printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+    flags=(); [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+    gh release view "$TAG" >/dev/null 2>&1 ||
+      gh release create "$TAG" --title "Sonaro AI ${TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" ||
+      gh release view "$TAG" >/dev/null
+    gh release upload "$TAG" "$@" --clobber
+  # Rejects inputs that are not a version tag and a full commit id.
+  CHECK_INPUTS: |
+    [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Bad tag"; exit 1; }
+    [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Bad commit"; exit 1; }
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - shell: bash
+        run: bash -c "$CHECK_INPUTS"
+      - uses: actions/checkout@v5
+        with:
+          repository: thangntse05041/Sonaro-AI
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # .npmrc sets ignore-scripts=true (better-sqlite3 ships prebuilt binaries).
+      - run: npm ci
+      - run: npm run build && npx electron-builder --win --publish never
+      - name: Publish the installers
+        shell: bash
+        run: bash -c "$PUBLISH" publish dist/*.exe dist/*.blockmap dist/latest.yml
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - run: bash -c "$CHECK_INPUTS"
+      - uses: actions/checkout@v5
+        with:
+          repository: thangntse05041/Sonaro-AI
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build && npx electron-builder --mac --publish never
+      - name: Publish the installers
+        run: bash -c "$PUBLISH" publish dist/*.dmg dist/*.blockmap dist/latest-mac.yml
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bash -c "$CHECK_INPUTS"
+      - uses: actions/checkout@v5
+        with:
+          repository: thangntse05041/Sonaro-AI
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      # The signing keystore is kept in this repo's secrets (see CLAUDE.md 13).
+      - name: Restore the signing keystore
+        run: printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/sonaro-release.jks"
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      # A download failing on Google's side (502) should not fail the release: try up to 3 times.
+      - name: Build the APK
+        run: |
+          chmod +x android/gradlew
+          for attempt in 1 2 3; do
+            npm run build:android && exit 0
+            echo "Android build failed (attempt $attempt), retrying in 60 s"
+            sleep 60
+          done
+          exit 1
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sonaro-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - name: Publish the APK
+        run: bash -c "$PUBLISH" publish dist/Sonaro-AI.apk
