@@ -46,12 +46,13 @@ env:
   MAIN_VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
   # Creates the release of TAG when no job did yet (two jobs may try at once), then uploads
   # the files given as arguments. Run as: bash -c "$PUBLISH" publish <files…>
+  # ${flags[@]+…}: the macOS runner has bash 3.2, where an empty array is "unbound" under set -u.
   PUBLISH: |
     set -euo pipefail
     printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
     flags=(); [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
     gh release view "$TAG" >/dev/null 2>&1 ||
-      gh release create "$TAG" --title "Sonaro AI ${TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" ||
+      gh release create "$TAG" --title "Sonaro AI ${TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" ${flags[@]+"${flags[@]}"} ||
       gh release view "$TAG" >/dev/null
     gh release upload "$TAG" "$@" --clobber
   # Rejects inputs that are not a version tag and a full commit id.
@@ -65,15 +66,17 @@ jobs:
     steps:
       - shell: bash
         run: bash -c "$CHECK_INPUTS"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           repository: thangntse05041/Sonaro-AI
           ref: ${{ inputs.sha }}
           ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
+          # No npm cache: Actions storage stays empty.
+          package-manager-cache: false
       # .npmrc sets ignore-scripts=true (better-sqlite3 ships prebuilt binaries).
       - run: npm ci
       - run: npm run build && npx electron-builder --win --publish never
@@ -85,34 +88,38 @@ jobs:
     runs-on: macos-latest
     steps:
       - run: bash -c "$CHECK_INPUTS"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           repository: thangntse05041/Sonaro-AI
           ref: ${{ inputs.sha }}
           ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
+          # No npm cache: Actions storage stays empty.
+          package-manager-cache: false
       - run: npm ci
       - run: npm run build && npx electron-builder --mac --publish never
       - name: Publish the installers
         run: bash -c "$PUBLISH" publish dist/*.dmg dist/*.blockmap dist/latest-mac.yml
 
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: bash -c "$CHECK_INPUTS"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           repository: thangntse05041/Sonaro-AI
           ref: ${{ inputs.sha }}
           ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: actions/setup-java@v5
+          # No npm cache: Actions storage stays empty.
+          package-manager-cache: false
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
