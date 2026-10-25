@@ -3,7 +3,10 @@
 #   connectors.json — the official MCP Registry for Settings → Connectors (its search takes 10–60 s;
 #                     the app searches this file on the device);
 #   skills.json     — the skills.sh list for Settings → Skills → Discover (used when skills.sh does
-#                     not answer).
+#                     not answer);
+#   ranking.json, versions.json — the AI ranking and the version notes from Supabase (public rows,
+#                     publishable key), read by the apps instead of Supabase (data-snapshot.mjs).
+#                     `npm run release` runs this workflow right after a release.
 # Lives in that repo as .github/workflows/registry-snapshot.yml; its source is docs/releases-repo/
 # of the app repo. No artifacts and no cache (Actions storage stays empty); both files go to the
 # branch as one commit, replaced only when one changed, so the repo does not grow. When one source
@@ -21,6 +24,7 @@ on:
       - .github/workflows/registry-snapshot.yml
       - .github/scripts/registry-snapshot.mjs
       - .github/scripts/skills-snapshot.mjs
+      - .github/scripts/data-snapshot.mjs
 
 permissions:
   contents: write
@@ -40,7 +44,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/old"
           if git fetch --depth 1 origin registry-data 2>/dev/null; then
             git show FETCH_HEAD:connectors.json > "$RUNNER_TEMP/old/connectors.json" 2>/dev/null || true
-            git show FETCH_HEAD:skills.json > "$RUNNER_TEMP/old/skills.json" 2>/dev/null || true
+            for f in skills.json ranking.json versions.json; do
+              git show "FETCH_HEAD:$f" > "$RUNNER_TEMP/old/$f" 2>/dev/null || true
+            done
           fi
       - name: Read the registry
         continue-on-error: true
@@ -48,6 +54,12 @@ jobs:
       - name: Read skills.sh
         continue-on-error: true
         run: node .github/scripts/skills-snapshot.mjs "$RUNNER_TEMP/skills.json"
+      - name: Read Supabase
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: node .github/scripts/data-snapshot.mjs "$RUNNER_TEMP"
       - name: Publish when one changed
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,7 +67,7 @@ jobs:
           set -euo pipefail
           dir="$(mktemp -d)"
           changed=0
-          for f in connectors.json skills.json; do
+          for f in connectors.json skills.json ranking.json versions.json; do
             if [ -s "$RUNNER_TEMP/$f" ]; then
               cp "$RUNNER_TEMP/$f" "$dir/$f"
             elif [ -s "$RUNNER_TEMP/old/$f" ]; then
@@ -74,6 +86,6 @@ jobs:
           cd "$dir"
           git init -q -b registry-data
           git add .
-          git -c user.name='github-actions[bot]'             -c user.email='41898282+github-actions[bot]@users.noreply.github.com'             commit -q -m 'Registry and skills snapshot'
+          git -c user.name='github-actions[bot]'             -c user.email='41898282+github-actions[bot]@users.noreply.github.com'             commit -q -m 'Registry, skills and data snapshot'
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" registry-data
           ls -l
