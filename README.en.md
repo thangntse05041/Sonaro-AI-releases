@@ -4,7 +4,7 @@
 
 Chat with free AI, search the web with cited sources, work with documents and code — on your computer and phone.
 
-**Website:** https://thangntse05041.github.io/Sonaro-AI-releases/?lang=en
+**Website:** https://sonaroai.app/en/about
 
 This repository only hosts the installers; the source code is kept separately.
 
@@ -28,5 +28,6 @@ All versions: [Releases](https://github.com/thangntse05041/Sonaro-AI-releases/re
 
 ## Links
 
-- [Privacy policy](https://thangntse05041.github.io/Sonaro-AI-releases/PRIVACY.html#en)
+- [Privacy policy](https://sonaroai.app/en/privacy)
+- [Terms of use](https://sonaroai.app/en/terms)
 - [Report a problem / contact](https://github.com/thangntse05041/Sonaro-AI-releases/issues)

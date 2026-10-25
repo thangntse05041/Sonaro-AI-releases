@@ -4,7 +4,7 @@
 
 Trò chuyện với AI miễn phí, tìm web kèm nguồn trích dẫn, làm việc với tài liệu và code — trên máy tính và điện thoại.
 
-**Trang chủ:** https://thangntse05041.github.io/Sonaro-AI-releases/?lang=vi
+**Trang chủ:** https://sonaroai.app/about
 
 Repo này chỉ chứa file cài đặt; mã nguồn được lưu riêng.
 
@@ -28,5 +28,6 @@ Tất cả phiên bản: [Releases](https://github.com/thangntse05041/Sonaro-AI-
 
 ## Liên kết
 
-- [Chính sách quyền riêng tư](https://thangntse05041.github.io/Sonaro-AI-releases/PRIVACY.html#vi)
+- [Chính sách quyền riêng tư](https://sonaroai.app/privacy)
+- [Điều khoản sử dụng](https://sonaroai.app/terms)
 - [Báo lỗi / liên hệ](https://github.com/thangntse05041/Sonaro-AI-releases/issues)

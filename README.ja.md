@@ -4,7 +4,7 @@
 
 無料のAIとチャット、出典付きのWeb検索、ドキュメントやコードの作業 — パソコンでもスマホでも。
 
-**ウェブサイト:** https://thangntse05041.github.io/Sonaro-AI-releases/?lang=ja
+**ウェブサイト:** https://sonaroai.app/ja/about
 
 このリポジトリはインストーラーのみを公開しています。ソースコードは別で管理しています。
 
@@ -28,5 +28,6 @@
 
 ## リンク
 
-- [プライバシーポリシー](https://thangntse05041.github.io/Sonaro-AI-releases/PRIVACY.html#ja)
+- [プライバシーポリシー](https://sonaroai.app/ja/privacy)
+- [利用規約](https://sonaroai.app/ja/terms)
 - [不具合の報告・お問い合わせ](https://github.com/thangntse05041/Sonaro-AI-releases/issues)
