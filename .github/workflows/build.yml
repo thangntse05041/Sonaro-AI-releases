@@ -7,6 +7,9 @@
 # The source is checked out with a read-only deploy key (secret SOURCE_DEPLOY_KEY). The logs of
 # this repo are public: no step prints source code (tests run on the developer's machine before
 # the release), and inputs reach the shell only through env, never through ${{ }} in `run`.
+# Only the platforms that changed are built (input platforms); the files of the others are copied
+# from the release that last built them (inputs carry_desktop, carry_android), so every release
+# holds every installer and the fixed links releases/latest/download/… keep working.
 # A failed or cancelled job is re-run alone (`gh run rerun --failed`, which `npm run release`
 # does by itself). No Actions artifacts and no npm cache: Actions storage stays empty.
 name: Build release
@@ -28,6 +31,18 @@ on:
         description: 'Mark the release as a pre-release'
         type: boolean
         default: false
+      platforms:
+        description: 'Jobs to build, comma-separated (windows,mac,android)'
+        required: true
+        default: 'windows,mac,android'
+      carry_desktop:
+        description: 'Release tag to copy the Windows and macOS files from (empty: built here)'
+        required: false
+        default: ''
+      carry_android:
+        description: 'Release tag to copy the APK from (empty: built here)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -37,6 +52,9 @@ env:
   SHA: ${{ inputs.sha }}
   NOTES: ${{ inputs.notes }}
   PRERELEASE: ${{ inputs.prerelease }}
+  PLATFORMS: ${{ inputs.platforms }}
+  CARRY_DESKTOP: ${{ inputs.carry_desktop }}
+  CARRY_ANDROID: ${{ inputs.carry_android }}
   GH_TOKEN: ${{ github.token }}
   GH_REPO: ${{ github.repository }}
   # The app is not code signed (see CLAUDE.md 14, Phase 6).
@@ -59,9 +77,14 @@ env:
   CHECK_INPUTS: |
     [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Bad tag"; exit 1; }
     [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Bad commit"; exit 1; }
+    [[ "$PLATFORMS" =~ ^(windows|mac|android)(,(windows|mac|android))*$ ]] || { echo "Bad platforms"; exit 1; }
+    for c in "$CARRY_DESKTOP" "$CARRY_ANDROID"; do
+      [[ -z "$c" || "$c" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Bad carry tag"; exit 1; }
+    done
 
 jobs:
   windows:
+    if: contains(format(',{0},', inputs.platforms), ',windows,')
     runs-on: windows-latest
     steps:
       - shell: bash
@@ -85,6 +108,7 @@ jobs:
         run: bash -c "$PUBLISH" publish dist/*.exe dist/*.blockmap dist/latest.yml
 
   mac:
+    if: contains(format(',{0},', inputs.platforms), ',mac,')
     runs-on: macos-latest
     steps:
       - run: bash -c "$CHECK_INPUTS"
@@ -105,6 +129,7 @@ jobs:
         run: bash -c "$PUBLISH" publish dist/*.dmg dist/*.blockmap dist/latest-mac.yml
 
   android:
+    if: contains(format(',{0},', inputs.platforms), ',android,')
     runs-on: ubuntu-24.04
     steps:
       - run: bash -c "$CHECK_INPUTS"
@@ -144,3 +169,22 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       - name: Publish the APK
         run: bash -c "$PUBLISH" publish dist/Sonaro-AI.apk
+
+  # The platforms not built this time: their files from the release that last built them.
+  carry:
+    if: inputs.carry_desktop != '' || inputs.carry_android != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - run: bash -c "$CHECK_INPUTS"
+      - name: Copy the files of the platforms not built
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/carry"
+          cd "$RUNNER_TEMP/carry"
+          if [ -n "$CARRY_DESKTOP" ]; then
+            gh release download "$CARRY_DESKTOP" -p '*.exe' -p '*.dmg' -p '*.blockmap' -p 'latest.yml' -p 'latest-mac.yml'
+          fi
+          if [ -n "$CARRY_ANDROID" ]; then
+            gh release download "$CARRY_ANDROID" -p 'Sonaro-AI.apk'
+          fi
+          bash -c "$PUBLISH" publish ./*
