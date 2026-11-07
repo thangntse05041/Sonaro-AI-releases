@@ -8,6 +8,16 @@ Trò chuyện với AI miễn phí, tìm web kèm nguồn trích dẫn, làm vi�
 
 Repo này chỉ chứa file cài đặt; mã nguồn được lưu riêng.
 
+## Tính năng chính
+
+- AI miễn phí, dùng ngay không cần tài khoản; hoặc AI chạy trên máy, hoặc API key riêng.
+- Tìm web kèm nguồn trích dẫn; nghiên cứu sâu tự kiểm chứng từng nhận định.
+- Đọc PDF, Word, Excel, ảnh, âm thanh, video; tạo file Word, PowerPoint, Excel.
+- Tạo ảnh, giọng nói, nhạc và video ngay trong cuộc trò chuyện.
+- Trợ lý với hướng dẫn và công cụ riêng; kho tri thức từ thư mục tài liệu (máy tính).
+- Code (máy tính): AI đọc, sửa file và chạy lệnh theo chế độ duyệt, có AI phụ chạy song song.
+- Đồng bộ nhiều thiết bị khi đăng nhập Google; nội dung được mã hoá trước khi rời thiết bị.
+
 ## Tải về
 
 | Hệ điều hành | File |
@@ -24,7 +34,7 @@ Tất cả phiên bản: [Releases](https://github.com/thangntse05041/Sonaro-AI-
 - App chưa được ký số. **Windows:** nếu SmartScreen cảnh báo, bấm **More info → Run anyway**.
 - **macOS:** lần đầu mở, nhấp chuột phải vào app → **Open**, hoặc System Settings → Privacy & Security → **Open Anyway**.
 - **Android:** mở file `.apk` đã tải; nếu được hỏi, cho phép cài ứng dụng không rõ nguồn gốc.
-- AI miễn phí dùng được ngay. Muốn chạy AI trên máy: cài [Ollama](https://ollama.com/download), hoặc cài và tải model ngay trong app (Cài đặt → Model trên máy).
+- AI miễn phí dùng được ngay. Muốn chạy AI trên máy: cài [Ollama](https://ollama.com/download), hoặc cài và tải model ngay trong app (Cài đặt → Ollama).
 
 ## Liên kết
 
