@@ -50,6 +50,7 @@ permissions:
 env:
   TAG: ${{ inputs.tag }}
   SHA: ${{ inputs.sha }}
+  SONARO_SOURCE_SHA: ${{ inputs.sha }}
   NOTES: ${{ inputs.notes }}
   PRERELEASE: ${{ inputs.prerelease }}
   PLATFORMS: ${{ inputs.platforms }}
@@ -67,6 +68,7 @@ env:
   # ${flags[@]+…}: the macOS runner has bash 3.2, where an empty array is "unbound" under set -u.
   PUBLISH: |
     set -euo pipefail
+    node "$GITHUB_WORKSPACE/scripts/releaseAudit.mjs" publish "$@"
     printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
     flags=(); [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
     gh release view "$TAG" >/dev/null 2>&1 ||
@@ -101,11 +103,10 @@ jobs:
           # No npm cache: Actions storage stays empty.
           package-manager-cache: false
       # .npmrc sets ignore-scripts=true (better-sqlite3 ships prebuilt binaries).
-      - run: npm ci
-      - run: npm run build && npx electron-builder --win --publish never
+      - run: node scripts/releaseBuild.mjs package windows --ci
       - name: Publish the installers
         shell: bash
-        run: bash -c "$PUBLISH" publish dist/*.exe dist/*.blockmap dist/latest.yml
+        run: bash -c "$PUBLISH" publish dist/*.exe dist/*.blockmap dist/latest.yml dist/build-provenance-windows.json dist/secret-scan-windows.json
 
   mac:
     if: contains(format(',{0},', inputs.platforms), ',mac,')
@@ -123,10 +124,9 @@ jobs:
           node-version: 24
           # No npm cache: Actions storage stays empty.
           package-manager-cache: false
-      - run: npm ci
-      - run: npm run build && npx electron-builder --mac --publish never
+      - run: node scripts/releaseBuild.mjs package mac --ci
       - name: Publish the installers
-        run: bash -c "$PUBLISH" publish dist/*.dmg dist/*.blockmap dist/latest-mac.yml
+        run: bash -c "$PUBLISH" publish dist/*.dmg dist/*.blockmap dist/latest-mac.yml dist/build-provenance-mac.json dist/secret-scan-mac.json
 
   android:
     if: contains(format(',{0},', inputs.platforms), ',android,')
@@ -148,7 +148,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - run: npm ci
       # The signing keystore is kept in this repo's secrets (see CLAUDE.md 13).
       - name: Restore the signing keystore
         run: printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/sonaro-release.jks"
@@ -159,7 +158,7 @@ jobs:
         run: |
           chmod +x android/gradlew
           for attempt in 1 2 3; do
-            npm run build:android && exit 0
+            node scripts/releaseBuild.mjs package android --ci && exit 0
             echo "Android build failed (attempt $attempt), retrying in 60 s"
             sleep 60
           done
@@ -168,7 +167,7 @@ jobs:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sonaro-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       - name: Publish the APK
-        run: bash -c "$PUBLISH" publish dist/Sonaro-AI.apk
+        run: bash -c "$PUBLISH" publish dist/Sonaro-AI.apk dist/build-provenance-android.json dist/secret-scan-android.json
 
   # The platforms not built this time: their files from the release that last built them.
   carry:
@@ -176,6 +175,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - run: bash -c "$CHECK_INPUTS"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: thangntse05041/Sonaro-AI
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
       - name: Copy the files of the platforms not built
         run: |
           set -euo pipefail
@@ -186,5 +195,24 @@ jobs:
           fi
           if [ -n "$CARRY_ANDROID" ]; then
             gh release download "$CARRY_ANDROID" -p 'Sonaro-AI.apk'
+          fi
+          # Carry original build provenance, never relabel old files as newly built.
+          carry_provenance() {
+            local tag="$1" platform="$2" name assets
+            assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
+            for name in "build-provenance-$platform.json" "secret-scan-$platform.json"; do
+              if ! printf '%s\n' "$assets" | grep -Fxq "$name"; then
+                echo "Rebuild $platform: $tag has no current release audit."
+                exit 1
+              fi
+              gh release download "$tag" -p "$name"
+            done
+          }
+          if [ -n "$CARRY_DESKTOP" ]; then
+            carry_provenance "$CARRY_DESKTOP" windows
+            carry_provenance "$CARRY_DESKTOP" mac
+          fi
+          if [ -n "$CARRY_ANDROID" ]; then
+            carry_provenance "$CARRY_ANDROID" android
           fi
           bash -c "$PUBLISH" publish ./*
